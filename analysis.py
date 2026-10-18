@@ -16,6 +16,15 @@ Outputs:
     <out>/plots/q3_timeseries_overlay.pdf       algorithms overlaid, shared axes
     <out>/plots/q3_scatter_compare.pdf          scatter plots side by side, shared axes
     <out>/plots/q3_regimes.pdf                  per-destination comparison across runs
+    <out>/plots/q3b_buffer_sweep.pdf            Q3(b): designed algorithm vs Reno, utilization/queue vs buffer
+    <out>/plots/q3b_dynamics.pdf                Q3(b): cwnd sawtooth, fairness, coexistence with Reno
+    <out>/tables/q3b_simulation.{csv,md}        Q3(b): simulation summary
+
+Q3(b) designed algorithm: GentleReno (see the "Q3(b)" section at the end of this
+file): Reno-style AIMD with a gentler multiplicative decrease (beta = 0.7), a
+Reno-friendly additive increase (a = 0.5 packet/RTT) and a slow-start exit on RTT
+rise or throughput plateau. Kernels only offer built-in algorithms to our iperf3
+client, so the design is evaluated with a fluid-model bottleneck simulation.
 """
 
 import csv
@@ -38,6 +47,7 @@ ALG_STYLE = {
     "cubic": dict(color="#2a78d6", ls="-", marker="o"),
     "reno": dict(color="#eb6834", ls="--", marker="s"),
     "bbr": dict(color="#1baf7a", ls=":", marker="^"),
+    "gentle-reno": dict(color="#eda100", ls="-.", marker="D"),
 }
 _EXTRA = [dict(color="#eda100", ls="-.", marker="D"), dict(color="#e87ba4", ls="-", marker="v"),
           dict(color="#008300", ls="--", marker="P")]
@@ -648,7 +658,244 @@ def make_plots(out_dir, runs, samples, per_run, rep_dest=None, warmup=0.0):
     return made, dest
 
 
-def analyze(out_dir, rep_dest=None, warmup=0.0):
+# =========================================================================
+# Q3(b): designed congestion control algorithm and its evaluation
+# =========================================================================
+class GentleReno:
+    """Gentle Reno: loss-based AIMD for steady (non-bursty) cross traffic.
+
+    Congestion window update, once per RTT (cwnd in packets):
+        loss (dup ACKs / SACK) : ssthresh = cwnd = max(0.7 * cwnd, 2)       [loss]
+        slow start             : cwnd *= 2, but exit (ssthresh = cwnd, no cut)
+                                 when srtt - min_rtt > max(4 ms, min_rtt/8)  [RTT]
+                                 or delivered rate grows < 25% for 3 rounds  [throughput]
+        congestion avoidance   : cwnd += 0.5
+        RTO timeout            : ssthresh = max(0.7 * cwnd, 2), cwnd = 1
+
+    beta = 0.7 keeps the link full whenever buffer >= (1-beta)/beta * BDP
+    = 0.43 BDP (Reno needs 1 BDP). a = 0.5 ~ 3(1-beta)/(1+beta) keeps the
+    throughput ~ sqrt(a(1+beta) / (2(1-beta)p)) equal to Reno's at the same
+    loss rate p, so it shares fairly with Reno.
+    """
+
+    name = "gentle-reno"
+
+    def __init__(self, beta=0.7, a=0.5, init_cwnd=10.0):
+        self.beta, self.a = beta, a
+        self.cwnd, self.ssthresh = init_cwnd, float("inf")
+        self.min_rtt, self.full_bw, self.flat_rounds = float("inf"), 0.0, 0
+
+    def on_round(self, now, rtt, delivered, sent, lost, duration):
+        self.min_rtt = min(self.min_rtt, rtt)
+        if lost >= 1:                                   # congestion: gentle cut
+            self.ssthresh = self.cwnd = max(self.beta * self.cwnd, 2.0)
+            return
+        if self.cwnd < self.ssthresh:                   # slow start
+            bw = delivered / duration if duration > 0 else 0.0
+            if bw >= 1.25 * self.full_bw:
+                self.full_bw, self.flat_rounds = bw, 0
+            else:
+                self.flat_rounds += 1
+            delay_up = rtt - self.min_rtt > max(0.004, self.min_rtt / 8)
+            if delay_up or self.flat_rounds >= 3:       # queue building / pipe full
+                self.ssthresh = self.cwnd               # exit without cutting
+                self.cwnd += self.a
+            else:
+                self.cwnd *= 2
+        else:                                           # congestion avoidance
+            self.cwnd += self.a
+
+    def on_timeout(self):
+        self.ssthresh = max(self.beta * self.cwnd, 2.0)
+        self.cwnd = 1.0
+
+
+class RenoReference:
+    """Classic Reno (beta = 0.5, a = 1, slow start until loss) as the baseline."""
+
+    name = "reno"
+
+    def __init__(self, init_cwnd=10.0):
+        self.cwnd, self.ssthresh = init_cwnd, float("inf")
+
+    def on_round(self, now, rtt, delivered, sent, lost, duration):
+        if lost >= 1:
+            self.ssthresh = self.cwnd = max(self.cwnd / 2, 2.0)
+        elif self.cwnd < self.ssthresh:
+            self.cwnd *= 2
+        else:
+            self.cwnd += 1
+
+
+def simulate_bottleneck(flows, capacity_mbps=50.0, buffer_bdp=1.0, ref_rtt=0.040,
+                        duration=60.0, dt=0.001, bin_s=0.2, mss=1500):
+    """Fluid model of one FIFO drop-tail bottleneck.
+
+    flows: list of {"algo", "base_rtt" [s], "start" [s], optional "stop" [s]}.
+    Each flow sends at cwnd / (base_rtt + queueing delay). Arrivals beyond the
+    buffer (buffer_bdp x capacity x ref_rtt) are dropped in proportion to each
+    flow's arrival rate. Each flow's algorithm is called once per RTT with that
+    round's delivered/sent/lost packets.
+    """
+    C = capacity_mbps * 1e6 / 8 / mss                 # packets / s
+    B = max(buffer_bdp * C * ref_rtt, 2.0)            # packets
+    n = len(flows)
+    q = 0.0
+    st = [dict(sent=0.0, deliv=0.0, lost=0.0, rstart=f["start"], next=f["start"], bin=0.0)
+          for f in flows]
+    spb = int(round(bin_s / dt))
+    nb = int(round(duration / bin_s))
+    out = {"t": (np.arange(nb) + 1) * bin_s, "qdelay_ms": np.zeros(nb),
+           "tput_mbps": np.zeros((n, nb)), "cwnd": np.zeros((n, nb)),
+           "lost": np.zeros(n), "sent": np.zeros(n)}
+    q_acc = 0.0
+    for step in range(nb * spb):
+        t = step * dt
+        qd = q / C
+        rates = [f["algo"].cwnd / (f["base_rtt"] + qd)
+                 if f["start"] <= t < f.get("stop", math.inf) else 0.0 for f in flows]
+        arr = [r * dt for r in rates]
+        total = sum(arr)
+        served = min(C * dt, q + total)
+        q_new = q + total - served
+        drop = 0.0
+        if q_new > B:
+            drop, q_new = q_new - B, B
+        q = max(q_new, 0.0)
+        for i, f in enumerate(flows):
+            share = arr[i] / total if total > 0 else 0.0
+            s = st[i]
+            s["sent"] += arr[i]
+            s["lost"] += drop * share
+            s["deliv"] += served * share
+            s["bin"] += served * share
+            out["sent"][i] += arr[i]
+            out["lost"][i] += drop * share
+            if rates[i] > 0 and t >= s["next"]:
+                rtt = f["base_rtt"] + q / C
+                f["algo"].on_round(t, rtt, s["deliv"], s["sent"], s["lost"],
+                                   max(t - s["rstart"], 1e-6))
+                s.update(sent=0.0, deliv=0.0, lost=0.0, rstart=t, next=t + rtt)
+        q_acc += q / C
+        if (step + 1) % spb == 0:
+            b = (step + 1) // spb - 1
+            out["qdelay_ms"][b] = q_acc / spb * 1e3
+            q_acc = 0.0
+            for i, f in enumerate(flows):
+                out["tput_mbps"][i][b] = st[i]["bin"] * mss * 8 / bin_s / 1e6
+                out["cwnd"][i][b] = f["algo"].cwnd
+                st[i]["bin"] = 0.0
+    return out
+
+
+def _jain(x):
+    x = np.asarray(x, dtype=float)
+    return float(x.sum() ** 2 / (len(x) * (x ** 2).sum())) if (x ** 2).sum() > 0 else math.nan
+
+
+DESIGN_ALGOS = {"reno": RenoReference, "gentle-reno": GentleReno}
+
+
+def make_design_outputs(out_dir, capacity_mbps=50.0, rtt=0.040):
+    """Q3(b): evaluate GentleReno against Reno in the fluid simulation."""
+    pdir, tdir = os.path.join(out_dir, "plots"), os.path.join(out_dir, "tables")
+    os.makedirs(pdir, exist_ok=True)
+    rows, made = [], []
+    scen = "%g Mbit/s, %g ms" % (capacity_mbps, rtt * 1e3)
+
+    # 1. Single flow, buffer sweep: utilization and queueing delay.
+    buffers = [0.1, 0.25, 0.43, 0.5, 1.0, 2.0]
+    sweep = {}
+    for name, cls in DESIGN_ALGOS.items():
+        util, qd = [], []
+        for b in buffers:
+            r = simulate_bottleneck([dict(algo=cls(), base_rtt=rtt, start=0)], capacity_mbps, b,
+                                    rtt, duration=60)
+            w = r["t"] >= 20
+            util.append(100 * r["tput_mbps"][0][w].mean() / capacity_mbps)
+            qd.append(float(r["qdelay_ms"][w].mean()))
+            rows.append({"scenario": "1 flow, buffer %.2f x BDP, %s" % (b, scen), "algorithm": name,
+                         "utilization_pct": util[-1], "mean_qdelay_ms": qd[-1],
+                         "loss_pct": 100 * r["lost"][0] / r["sent"][0]})
+        sweep[name] = (util, qd)
+    fig, axes = plt.subplots(1, 2, figsize=(9, 3.4))
+    for name, (util, qd) in sweep.items():
+        stl = style(name)
+        axes[0].plot(buffers, util, color=stl["color"], ls=stl["ls"], marker=stl["marker"], label=name)
+        axes[1].plot(buffers, qd, color=stl["color"], ls=stl["ls"], marker=stl["marker"], label=name)
+    for ax in axes:
+        ax.axvline(0.43, color=MUTED, lw=0.8, ls=":")
+        ax.set_xlabel("bottleneck buffer [x BDP]")
+    axes[0].text(0.45, 2, "(1-β)/β = 0.43", color=MUTED, fontsize=7)
+    axes[0].set_ylabel("link utilization [%]")
+    axes[0].set_ylim(0, 105)
+    axes[1].set_ylabel("mean queueing delay [ms]")
+    axes[0].legend(loc="lower right")
+    fig.suptitle("Q3(b) single flow, %s: utilization and queueing vs buffer size" % scen,
+                 fontsize=10, color=INK)
+    fig.tight_layout()
+    p = os.path.join(pdir, "q3b_buffer_sweep.pdf")
+    fig.savefig(p)
+    plt.close(fig)
+    made.append(p)
+
+    # 2. Dynamics: sawtooth, fairness between GentleReno flows, coexistence with Reno.
+    fig, axes = plt.subplots(3, 1, figsize=(7.5, 8.2), sharex=True)
+    for name, cls in DESIGN_ALGOS.items():
+        r = simulate_bottleneck([dict(algo=cls(), base_rtt=rtt, start=0)], capacity_mbps, 1.0,
+                                rtt, duration=60)
+        stl = style(name)
+        axes[0].plot(r["t"], r["cwnd"][0], color=stl["color"], ls=stl["ls"], label=name)
+        early = simulate_bottleneck([dict(algo=cls(), base_rtt=rtt, start=0)], capacity_mbps, 1.0,
+                                    rtt, duration=10)
+        rows.append({"scenario": "startup (first 10 s), 1 flow, buffer 1 x BDP", "algorithm": name,
+                     "packets_lost": float(early["lost"][0])})
+    axes[0].set_ylabel("cwnd [packets]")
+    axes[0].set_title("Single flow, buffer = 1 BDP: sawtooth (0.5 vs 0.7 backoff)", fontsize=9)
+    axes[0].legend(loc="upper right")
+
+    pair = [dict(algo=GentleReno(), base_rtt=rtt, start=0), dict(algo=GentleReno(), base_rtt=rtt, start=10)]
+    r = simulate_bottleneck(pair, capacity_mbps, 1.0, rtt, duration=60)
+    for i, lab in enumerate(["gentle-reno flow 1", "gentle-reno flow 2 (joins at 10 s)"]):
+        axes[1].plot(r["t"], r["tput_mbps"][i], color=style("gentle-reno")["color"],
+                     ls=["-", "--"][i], lw=1, label=lab)
+    m = r["tput_mbps"][:, r["t"] >= 40].mean(axis=1)
+    rows.append({"scenario": "2 gentle-reno flows, 2nd joins at 10 s (40-60 s)", "algorithm": "gentle-reno",
+                 "throughput_split_mbps": "%.1f / %.1f" % tuple(m), "jain_index": _jain(m)})
+    axes[1].set_ylabel("throughput [Mbit/s]")
+    axes[1].set_title("Convergence: two Gentle Reno flows", fontsize=9)
+    axes[1].legend(loc="upper right", fontsize=7)
+
+    mix = [dict(algo=GentleReno(), base_rtt=rtt, start=0), dict(algo=RenoReference(), base_rtt=rtt, start=0)]
+    r = simulate_bottleneck(mix, capacity_mbps, 1.0, rtt, duration=60)
+    for i, name in enumerate(["gentle-reno", "reno"]):
+        stl = style(name)
+        axes[2].plot(r["t"], r["tput_mbps"][i], color=stl["color"], ls=stl["ls"], lw=1, label=name)
+    m = r["tput_mbps"][:, r["t"] >= 20].mean(axis=1)
+    rows.append({"scenario": "gentle-reno vs reno, same path (20-60 s)", "algorithm": "gentle-reno / reno",
+                 "throughput_split_mbps": "%.1f / %.1f" % tuple(m), "jain_index": _jain(m)})
+    axes[2].set_ylabel("throughput [Mbit/s]")
+    axes[2].set_title("TCP-friendliness: Gentle Reno vs Reno", fontsize=9)
+    axes[2].legend(loc="upper right", fontsize=7)
+    axes[2].set_xlabel("time [s]")
+    for ax in axes[1:]:
+        ax.set_ylim(0, capacity_mbps * 1.1)
+    fig.suptitle("Q3(b) Gentle Reno dynamics (fluid simulation, %s)" % scen, fontsize=10, color=INK)
+    fig.tight_layout()
+    p = os.path.join(pdir, "q3b_dynamics.pdf")
+    fig.savefig(p)
+    plt.close(fig)
+    made.append(p)
+
+    cols = ["scenario", "algorithm", "utilization_pct", "mean_qdelay_ms", "loss_pct",
+            "packets_lost", "throughput_split_mbps", "jain_index"]
+    _write_table(rows, cols, os.path.join(tdir, "q3b_simulation"),
+                 "Q3(b) Gentle Reno vs Reno (fluid simulation)")
+    made.append(os.path.join(tdir, "q3b_simulation.md"))
+    return made
+
+
+def analyze(out_dir, rep_dest=None, warmup=0.0, design=True):
     runs = load_runs(out_dir)
     if not runs:
         print("No runs found in", out_dir)
@@ -656,6 +903,8 @@ def analyze(out_dir, rep_dest=None, warmup=0.0):
     samples = {r["run_id"]: load_samples(out_dir, r["run_id"]) for r in runs}
     per_run, _, _ = build_tables(out_dir, runs, samples, warmup)
     made, dest = make_plots(out_dir, runs, samples, per_run, rep_dest, warmup=warmup)
+    if design:
+        made += make_design_outputs(out_dir)
     meta_path = os.path.join(out_dir, "metadata.json")
     if os.path.exists(meta_path):
         with open(meta_path) as f:
