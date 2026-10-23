@@ -133,7 +133,7 @@ def _warm(d, warmup):
 
 
 # ------------------------------------------------------------------ tables
-def _write_table(rows, columns, base_path, title=None, floatfmt="%.2f"):
+def _write_table(rows, columns, base_path, title=None, floatfmt=".2f"):
     os.makedirs(os.path.dirname(base_path), exist_ok=True)
     with open(base_path + ".csv", "w", newline="") as f:
         w = csv.DictWriter(f, fieldnames=columns, extrasaction="ignore")
@@ -143,12 +143,12 @@ def _write_table(rows, columns, base_path, title=None, floatfmt="%.2f"):
 
     def fmt(v):
         if isinstance(v, float):
-            return "" if math.isnan(v) else floatfmt % v
+            return "" if math.isnan(v) else format(v, floatfmt)
         return "" if v is None else str(v)
 
     with open(base_path + ".md", "w") as f:
         if title:
-            f.write("### %s\n\n" % title)
+            f.write(f"### {title}\n\n")
         f.write("| " + " | ".join(columns) + " |\n")
         f.write("|" + "|".join("---" for _ in columns) + "|\n")
         for r in rows:
@@ -243,22 +243,22 @@ def build_tables(out_dir, runs, samples, warmup=0.0):
             g = np.array([p["goodput_mean_mbps"] for p in rs])
             rtt = np.array([p["srtt_mean_ms"] for p in rs])
             rr = np.array([p["retrans_rate_pct"] for p in rs])
-            row["%s_runs" % alg] = len(rs)
-            row["%s_goodput_mbps" % alg] = _stat(np.mean, g)
-            row["%s_goodput_std" % alg] = _stat(np.std, g)
-            row["%s_srtt_ms" % alg] = _stat(np.mean, rtt)
-            row["%s_srtt_std" % alg] = _stat(np.std, rtt)
-            row["%s_retrans_pct" % alg] = _stat(np.mean, rr)
+            row[f"{alg}_runs"] = len(rs)
+            row[f"{alg}_goodput_mbps"] = _stat(np.mean, g)
+            row[f"{alg}_goodput_std"] = _stat(np.std, g)
+            row[f"{alg}_srtt_ms"] = _stat(np.mean, rtt)
+            row[f"{alg}_srtt_std"] = _stat(np.std, rtt)
+            row[f"{alg}_retrans_pct"] = _stat(np.mean, rr)
             if len(rs):
-                best[alg] = (row["%s_goodput_mbps" % alg], row["%s_srtt_ms" % alg])
+                best[alg] = (row[f"{alg}_goodput_mbps"], row[f"{alg}_srtt_ms"])
         if best:
             row["best_goodput"] = max(best, key=lambda a: best[a][0])
             row["lowest_rtt"] = min(best, key=lambda a: best[a][1])
         comp.append(row)
     ccols = ["destination"]
     for alg in algs:
-        ccols += ["%s_runs" % alg, "%s_goodput_mbps" % alg, "%s_goodput_std" % alg,
-                  "%s_srtt_ms" % alg, "%s_srtt_std" % alg, "%s_retrans_pct" % alg]
+        ccols += [f"{alg}_runs", f"{alg}_goodput_mbps", f"{alg}_goodput_std",
+                  f"{alg}_srtt_ms", f"{alg}_srtt_std", f"{alg}_retrans_pct"]
     ccols += ["best_goodput", "lowest_rtt"]
     _write_table(comp, ccols, os.path.join(tdir, "algorithm_comparison"),
                  "Algorithm comparison: mean (std) over repetitions of per-run means")
@@ -292,7 +292,7 @@ def choose_representative(runs, samples, override=None):
     if override:
         cand = [d for d in dests if d == override or d.split(":")[0] == override]
         if not cand:
-            raise SystemExit("--rep-dest %r not among destinations %s" % (override, dests))
+            raise SystemExit(f"--rep-dest {override!r} not among destinations {dests}")
         dests = cand
 
     def score(dest):
@@ -435,7 +435,7 @@ def _scatter(ax, d, key, alg, i=0):
     ok = np.isfinite(x) & np.isfinite(y)
     if ok.sum() > 3 and np.nanstd(x[ok]) > 0 and np.nanstd(y[ok]) > 0:
         r = np.corrcoef(x[ok], y[ok])[0, 1]
-        ax.text(0.98, 0.04, "Pearson r = %.2f" % r, transform=ax.transAxes, ha="right",
+        ax.text(0.98, 0.04, f"Pearson r = {r:.2f}", transform=ax.transAxes, ha="right",
                 fontsize=7, color=INK)
 
 
@@ -482,7 +482,7 @@ def plot_goodput_all(path, runs, samples, rows_per_page=6):
                     for k, r in enumerate(reps):
                         d = derived(samples[r["run_id"]])
                         ax.plot(d["t"], d["goodput_mbps"], color=st["color"], ls=lss[k % 4],
-                                lw=0.9, alpha=0.9, label="rep %d" % r["rep"])
+                                lw=0.9, alpha=0.9, label=f"rep {r['rep']}")
                     if not reps:
                         ax.text(0.5, 0.5, "no usable run", transform=ax.transAxes,
                                 ha="center", va="center", color=MUTED)
@@ -492,13 +492,13 @@ def plot_goodput_all(path, runs, samples, rows_per_page=6):
                     if ri == 0:
                         ax.set_title(alg, color=INK)
                     if ci == 0:
-                        ax.set_ylabel("%s\nMbit/s" % dest, fontsize=7.5)
+                        ax.set_ylabel(f"{dest}\nMbit/s", fontsize=7.5)
                     if reps and ci == len(algs) - 1:
                         ax.legend(fontsize=6.5, loc="upper right")
             for ax in axes[-1]:
                 ax.set_xlabel("time [s]")
             fig.suptitle("Goodput over time (Δ tcpi_bytes_acked / Δt), all destinations "
-                         "(page %d)" % (p // rows_per_page + 1), fontsize=10, color=INK)
+                         f"(page {p // rows_per_page + 1})", fontsize=10, color=INK)
             fig.tight_layout()
             pdf.savefig(fig)
             plt.close(fig)
@@ -559,7 +559,7 @@ def make_plots(out_dir, runs, samples, per_run, rep_dest=None, warmup=0.0):
     if dest is None:
         print("No usable runs: skipping Q2/Q3 plots")
         return made, None
-    print("Representative destination: %s (repetition %s)" % (dest, rep))
+    print(f"Representative destination: {dest} (repetition {rep})")
 
     # Representative time series = one repetition; scatter = all repetitions.
     ts, sc, actual = {}, {}, {}
@@ -580,13 +580,13 @@ def make_plots(out_dir, runs, samples, per_run, rep_dest=None, warmup=0.0):
 
     # Q2 (b) and Q3 (a): the same figures for every algorithm, consistent axes.
     for alg, (d, r) in ts.items():
-        name = "q2_timeseries_%s.pdf" % alg
+        name = f"q2_timeseries_{alg}.pdf"
         plot_timeseries(os.path.join(pdir, name), d, alg,
-                        "%s — %s (actual: %s), rep %s" % (dest, alg, actual[alg], r["rep"]), tlim)
+                        f"{dest} — {alg} (actual: {actual[alg]}), rep {r['rep']}", tlim)
         made.append(os.path.join(pdir, name))
-        name = "q2_scatter_%s.pdf" % alg
+        name = f"q2_scatter_{alg}.pdf"
         plot_scatter(os.path.join(pdir, name), sc[alg], alg,
-                     "%s — %s (actual: %s), all repetitions" % (dest, alg, actual[alg]), slim)
+                     f"{dest} — {alg} (actual: {actual[alg]}), all repetitions", slim)
         made.append(os.path.join(pdir, name))
 
     # Side-by-side comparison, shared axes.
@@ -596,7 +596,7 @@ def make_plots(out_dir, runs, samples, per_run, rep_dest=None, warmup=0.0):
         col = [axes[ri][ci] for ri in range(4)]
         _ts_axes_fill(col, d, alg, ci)
         _apply_ts_limits(col, tlim)
-        col[0].set_title("%s (actual: %s)" % (alg, actual[alg]), color=INK)
+        col[0].set_title(f"{alg} (actual: {actual[alg]})", color=INK)
         col[-1].set_xlabel("time [s]")
         if ci == 0:
             for ax, yl in zip(col, TS_YLABELS):
@@ -604,7 +604,7 @@ def make_plots(out_dir, runs, samples, per_run, rep_dest=None, warmup=0.0):
         if ci == n - 1:
             for ax in col:
                 ax.legend(fontsize=6.5, loc="upper right")
-    fig.suptitle("Time series, %s, rep %s (same axes for all algorithms)" % (dest, rep),
+    fig.suptitle(f"Time series, {dest}, rep {rep} (same axes for all algorithms)",
                  fontsize=10, color=INK)
     fig.tight_layout()
     p = os.path.join(pdir, "q3_timeseries_compare.pdf")
@@ -621,7 +621,7 @@ def make_plots(out_dir, runs, samples, per_run, rep_dest=None, warmup=0.0):
     axes[0].legend(loc="upper right", fontsize=7)
     axes[-1].set_xlabel("time since start of transfer [s]")
     _apply_ts_limits(axes, tlim)
-    fig.suptitle("Algorithms overlaid, %s, rep %s" % (dest, rep), fontsize=10, color=INK)
+    fig.suptitle(f"Algorithms overlaid, {dest}, rep {rep}", fontsize=10, color=INK)
     fig.tight_layout()
     p = os.path.join(pdir, "q3_timeseries_overlay.pdf")
     fig.savefig(p)
@@ -643,8 +643,8 @@ def make_plots(out_dir, runs, samples, per_run, rep_dest=None, warmup=0.0):
             ax.set_xlabel(xl)
             if ci == 0:
                 ax.set_ylabel("goodput [Mbit/s]")
-        axes[0][ci].set_title("%s (actual: %s)" % (alg, actual[alg]), color=INK)
-    fig.suptitle("Goodput relationships, %s, all repetitions (same axes)" % dest,
+        axes[0][ci].set_title(f"{alg} (actual: {actual[alg]})", color=INK)
+    fig.suptitle(f"Goodput relationships, {dest}, all repetitions (same axes)",
                  fontsize=10, color=INK)
     fig.tight_layout()
     p = os.path.join(pdir, "q3_scatter_compare.pdf")
@@ -801,7 +801,7 @@ def make_design_outputs(out_dir, capacity_mbps=50.0, rtt=0.040):
     pdir, tdir = os.path.join(out_dir, "plots"), os.path.join(out_dir, "tables")
     os.makedirs(pdir, exist_ok=True)
     rows, made = [], []
-    scen = "%g Mbit/s, %g ms" % (capacity_mbps, rtt * 1e3)
+    scen = f"{capacity_mbps:g} Mbit/s, {rtt * 1e3:g} ms"
 
     # 1. Single flow, buffer sweep: utilization and queueing delay.
     buffers = [0.1, 0.25, 0.43, 0.5, 1.0, 2.0]
@@ -814,7 +814,7 @@ def make_design_outputs(out_dir, capacity_mbps=50.0, rtt=0.040):
             w = r["t"] >= 20
             util.append(100 * r["tput_mbps"][0][w].mean() / capacity_mbps)
             qd.append(float(r["qdelay_ms"][w].mean()))
-            rows.append({"scenario": "1 flow, buffer %.2f x BDP, %s" % (b, scen), "algorithm": name,
+            rows.append({"scenario": f"1 flow, buffer {b:.2f} x BDP, {scen}", "algorithm": name,
                          "utilization_pct": util[-1], "mean_qdelay_ms": qd[-1],
                          "loss_pct": 100 * r["lost"][0] / r["sent"][0]})
         sweep[name] = (util, qd)
@@ -831,7 +831,7 @@ def make_design_outputs(out_dir, capacity_mbps=50.0, rtt=0.040):
     axes[0].set_ylim(0, 105)
     axes[1].set_ylabel("mean queueing delay [ms]")
     axes[0].legend(loc="lower right")
-    fig.suptitle("Q3(b) single flow, %s: utilization and queueing vs buffer size" % scen,
+    fig.suptitle(f"Q3(b) single flow, {scen}: utilization and queueing vs buffer size",
                  fontsize=10, color=INK)
     fig.tight_layout()
     p = os.path.join(pdir, "q3b_buffer_sweep.pdf")
@@ -861,7 +861,7 @@ def make_design_outputs(out_dir, capacity_mbps=50.0, rtt=0.040):
                      ls=["-", "--"][i], lw=1, label=lab)
     m = r["tput_mbps"][:, r["t"] >= 40].mean(axis=1)
     rows.append({"scenario": "2 gentle-reno flows, 2nd joins at 10 s (40-60 s)", "algorithm": "gentle-reno",
-                 "throughput_split_mbps": "%.1f / %.1f" % tuple(m), "jain_index": _jain(m)})
+                 "throughput_split_mbps": f"{m[0]:.1f} / {m[1]:.1f}", "jain_index": _jain(m)})
     axes[1].set_ylabel("throughput [Mbit/s]")
     axes[1].set_title("Convergence: two Gentle Reno flows", fontsize=9)
     axes[1].legend(loc="upper right", fontsize=7)
@@ -873,14 +873,14 @@ def make_design_outputs(out_dir, capacity_mbps=50.0, rtt=0.040):
         axes[2].plot(r["t"], r["tput_mbps"][i], color=stl["color"], ls=stl["ls"], lw=1, label=name)
     m = r["tput_mbps"][:, r["t"] >= 20].mean(axis=1)
     rows.append({"scenario": "gentle-reno vs reno, same path (20-60 s)", "algorithm": "gentle-reno / reno",
-                 "throughput_split_mbps": "%.1f / %.1f" % tuple(m), "jain_index": _jain(m)})
+                 "throughput_split_mbps": f"{m[0]:.1f} / {m[1]:.1f}", "jain_index": _jain(m)})
     axes[2].set_ylabel("throughput [Mbit/s]")
     axes[2].set_title("TCP-friendliness: Gentle Reno vs Reno", fontsize=9)
     axes[2].legend(loc="upper right", fontsize=7)
     axes[2].set_xlabel("time [s]")
     for ax in axes[1:]:
         ax.set_ylim(0, capacity_mbps * 1.1)
-    fig.suptitle("Q3(b) Gentle Reno dynamics (fluid simulation, %s)" % scen, fontsize=10, color=INK)
+    fig.suptitle(f"Q3(b) Gentle Reno dynamics (fluid simulation, {scen})", fontsize=10, color=INK)
     fig.tight_layout()
     p = os.path.join(pdir, "q3b_dynamics.pdf")
     fig.savefig(p)
@@ -912,6 +912,6 @@ def analyze(out_dir, rep_dest=None, warmup=0.0, design=True):
         meta["representative_destination"] = dest
         with open(meta_path, "w") as f:
             json.dump(meta, f, indent=2)
-    print("Tables: %s" % os.path.join(out_dir, "tables"))
+    print(f"Tables: {os.path.join(out_dir, 'tables')}")
     for p in made:
         print("Plot:  ", p)

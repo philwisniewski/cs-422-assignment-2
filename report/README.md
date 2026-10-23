@@ -1,0 +1,3 @@
+```
+pdflatex main.tex
+```
