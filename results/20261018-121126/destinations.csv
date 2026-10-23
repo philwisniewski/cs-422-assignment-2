@@ -1,0 +1,11 @@
+dest_index,host,port,continent,country,site,provider,gbps
+1,154.81.51.4,5201,Oceania,PG,Port Moresby,DATAPACKET,2x10
+2,la.speedtest.clouvider.net,5209,North America,US,Los Angeles,Clouvider,10
+3,iperf.pendc.com,5202,Asia,TR,Bursa,PENDC,10
+4,speedtest.rapidswitch.com,5209,Europe,GB,Maidenhead,RapidSwitch,1
+5,23.249.54.234,30008,North America,US,Miami,FortiSASE,10
+6,speedtest.hkg12.hk.leaseweb.net,5205,Asia,HK,Hong Kong,LeaseWeb,10
+7,87.249.137.8,5201,Europe,IE,Dublin,DATAPACKET,2x10
+8,speedtest.level66.services,5205,Europe,DE,Frankfurt,level66.network,10
+9,185.102.219.93,5201,Europe,DE,Frankfurt,DATAPACKET,2x10
+10,speed.rimon.net.il,5201,Asia,IL,Jerusalem,Rimon,1

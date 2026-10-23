@@ -1,0 +1,4 @@
+dest_index,host,port,continent,country,site,provider,gbps
+1,speedtest.ams1.nl.leaseweb.net,5205,Europe,NL,Amsterdam,LeaseWeb,10
+2,ping.online.net,5206,Europe,FR,Vitry-sur-Seine,Scaleway,100
+3,speedtest.netone.nl,5201,Europe,NL,Amsterdam,NetOne,10

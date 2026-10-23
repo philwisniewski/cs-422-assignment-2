@@ -1,0 +1,4 @@
+seq,rep,dest_index,destination,algorithm,attempts,status,start_unix
+1,1,1,154.81.51.4:5201,cubic,1,ok,1792339958.732
+2,1,1,154.81.51.4:5201,reno,1,ok,1792340023.022
+3,1,1,154.81.51.4:5201,bbr,1,ok,1792340087.214

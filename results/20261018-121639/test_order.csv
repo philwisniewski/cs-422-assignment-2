@@ -1,0 +1,10 @@
+seq,rep,dest_index,destination,algorithm,attempts,status,start_unix
+1,1,1,speedtest.ams1.nl.leaseweb.net:5205,cubic,1,ok,1792340223.857
+2,1,1,speedtest.ams1.nl.leaseweb.net:5205,reno,1,ok,1792340241.937
+3,1,1,speedtest.ams1.nl.leaseweb.net:5205,bbr,1,ok,1792340259.689
+4,1,2,ping.online.net:5206,reno,1,ok,1792340277.433
+5,1,2,ping.online.net:5206,bbr,1,ok,1792340295.495
+6,1,2,ping.online.net:5206,cubic,1,ok,1792340313.533
+7,1,3,speedtest.netone.nl:5201,bbr,1,ok,1792340331.59
+8,1,3,speedtest.netone.nl:5201,cubic,1,ok,1792340349.592
+9,1,3,speedtest.netone.nl:5201,reno,1,ok,1792340367.605

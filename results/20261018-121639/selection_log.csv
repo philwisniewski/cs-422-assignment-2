@@ -1,0 +1,5 @@
+attempt,host,port,ports_listed,country,site,provider,outcome,status,error_kind,error_phase,error_msg,probe_goodput_mbps
+1,speedtest.ams1.nl.leaseweb.net,5205,10,NL,Amsterdam,LeaseWeb,selected,ok,,,,85.44
+2,37.19.203.1,5201,1,BG,Sofia,DATAPACKET,rejected,failed,connect_refused,control_connect,[Errno 111] Connection refused,
+3,ping.online.net,5206,10,FR,Vitry-sur-Seine,Scaleway,selected,ok,,,,85.44
+4,speedtest.netone.nl,5201,1,NL,Amsterdam,NetOne,selected,ok,,,,3.61

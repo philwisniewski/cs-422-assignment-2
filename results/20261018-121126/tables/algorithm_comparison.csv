@@ -1,0 +1,3 @@
+destination,cubic_runs,cubic_goodput_mbps,cubic_goodput_std,cubic_srtt_ms,cubic_srtt_std,cubic_retrans_pct,reno_runs,reno_goodput_mbps,reno_goodput_std,reno_srtt_ms,reno_srtt_std,reno_retrans_pct,bbr_runs,bbr_goodput_mbps,bbr_goodput_std,bbr_srtt_ms,bbr_srtt_std,bbr_retrans_pct,best_goodput,lowest_rtt
+154.81.51.4:5201,1,62.743090875742226,0.0,238.31765333333334,0.0,0.8177837910517118,1,30.321666274953387,0.0,237.85001,0.0,0.9583915727257264,1,82.92280007729315,0.0,245.37586333333334,0.0,0.7397838926100436,bbr,reno
+ALL,1,62.743090875742226,0.0,238.31765333333334,0.0,0.8177837910517118,1,30.321666274953387,0.0,237.85001,0.0,0.9583915727257264,1,82.92280007729315,0.0,245.37586333333334,0.0,0.7397838926100436,bbr,reno

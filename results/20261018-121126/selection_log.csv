@@ -1,0 +1,11 @@
+attempt,host,port,ports_listed,country,site,provider,outcome,status,error_kind,error_phase,error_msg,probe_goodput_mbps
+1,154.81.51.4,5201,1,PG,Port Moresby,DATAPACKET,selected,ok,,,,25.08
+2,la.speedtest.clouvider.net,5209,10,US,Los Angeles,Clouvider,selected,ok,,,,217.17
+3,iperf.pendc.com,5202,9,TR,Bursa,PENDC,selected,ok,,,,40.46
+4,speedtest.rapidswitch.com,5209,9,GB,Maidenhead,RapidSwitch,selected,ok,,,,40.83
+5,23.249.54.234,30008,8,US,Miami,FortiSASE,selected,ok,,,,236.68
+6,speedtest.hkg12.hk.leaseweb.net,5205,10,HK,Hong Kong,LeaseWeb,selected,ok,,,,29.27
+7,87.249.137.8,5201,1,IE,Dublin,DATAPACKET,selected,ok,,,,22.19
+8,speedtest.level66.services,5205,5,DE,Frankfurt,level66.network,selected,ok,,,,71.25
+9,185.102.219.93,5201,1,DE,Frankfurt,DATAPACKET,selected,ok,,,,90.78
+10,speed.rimon.net.il,5201,1,IL,Jerusalem,Rimon,selected,ok,,,,58.3
