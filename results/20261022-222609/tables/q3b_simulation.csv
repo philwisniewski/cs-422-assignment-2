@@ -1,0 +1,17 @@
+scenario,algorithm,utilization_pct,mean_qdelay_ms,loss_pct,packets_lost,throughput_split_mbps,jain_index
+"1 flow, buffer 0.10 x BDP, 50 Mbit/s, 40 ms",reno,82.00169306920196,0.4503824016456311,0.06831108150276699,,,
+"1 flow, buffer 0.25 x BDP, 50 Mbit/s, 40 ms",reno,89.7229309732023,2.3226864147770137,0.03600255726103116,,,
+"1 flow, buffer 0.43 x BDP, 50 Mbit/s, 40 ms",reno,95.12482435599551,6.183121593437591,0.013846684431076688,,,
+"1 flow, buffer 0.50 x BDP, 50 Mbit/s, 40 ms",reno,96.66325772965246,8.099859595167095,0.20080016865800002,,,
+"1 flow, buffer 1.00 x BDP, 50 Mbit/s, 40 ms",reno,99.99999999999974,22.25380464415251,0.07308259435813884,,,
+"1 flow, buffer 2.00 x BDP, 50 Mbit/s, 40 ms",reno,99.99999999999974,51.96040368282686,0.31928049910319994,,,
+"1 flow, buffer 0.10 x BDP, 50 Mbit/s, 40 ms",gentle-reno,92.66021780991119,0.7328275537207539,0.011287794945852966,,,
+"1 flow, buffer 0.25 x BDP, 50 Mbit/s, 40 ms",gentle-reno,98.37929653322254,3.837791525816213,0.007843478738678638,,,
+"1 flow, buffer 0.43 x BDP, 50 Mbit/s, 40 ms",gentle-reno,99.99999999999974,9.249311866258203,0.005979394437950327,,,
+"1 flow, buffer 0.50 x BDP, 50 Mbit/s, 40 ms",gentle-reno,99.99999999999974,11.79430507153075,0.004566589882355288,,,
+"1 flow, buffer 1.00 x BDP, 50 Mbit/s, 40 ms",gentle-reno,99.99999999999974,29.0203706799441,0.0026381769176645727,,,
+"1 flow, buffer 2.00 x BDP, 50 Mbit/s, 40 ms",gentle-reno,99.99999999999974,55.95940621805894,0.0,,,
+"startup (first 10 s), 1 flow, buffer 1 x BDP",reno,,,,172.01993271342582,,
+"startup (first 10 s), 1 flow, buffer 1 x BDP",gentle-reno,,,,0.0,,
+"2 gentle-reno flows, 2nd joins at 10 s (40-60 s)",gentle-reno,,,,,25.0 / 25.0,0.9999989177650713
+"gentle-reno vs reno, same path (20-60 s)",gentle-reno / reno,,,,,24.6 / 25.4,0.9997937638332015

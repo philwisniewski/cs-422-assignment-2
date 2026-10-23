@@ -1,0 +1,16 @@
+attempt,host,port,ports_listed,country,site,provider,outcome,status,error_kind,error_phase,error_msg,probe_goodput_mbps
+1,185.93.1.65,5201,1,US,Chicago,DATAPACKET,rejected,failed,busy,param_exchange,server answered ACCESS_DENIED (busy with another test or refusing this client),
+2,185.102.218.1,5201,1,NL,Amsterdam,DATAPACKET,rejected,failed,busy,param_exchange,server answered ACCESS_DENIED (busy with another test or refusing this client),
+3,a210.speedtest.wobcom.de,5201,1,DE,Frankfurt,WOBCOM,selected,ok,,,,2.4
+4,102.214.66.19,5201,1,GH,Accra,DATAPACKET,selected,ok,,,,27.63
+5,122.228.230.122,5202,20,CN,Ningbo,China Telecom,selected,ok,,,,1.16
+6,66.35.31.81,30003,9,JP,Tokyo,FortiSASE,selected,ok,,,,37.33
+7,iperf.as42831.net,5361,101,GB,London,UK Servers,selected,ok,,,,72.37
+8,138.199.4.1,5201,1,BR,São Paulo,DATAPACKET,rejected,failed,busy,param_exchange,server answered ACCESS_DENIED (busy with another test or refusing this client),
+9,ping.online.net,5207,10,FR,Vitry-sur-Seine,Scaleway,selected,ok,,,,77.82
+10,speedtest.goco.ca,9214,36,CA,Montreal,TELUS,selected,ok,,,,307.84
+11,207.211.214.65,5201,1,BE,Brussels,DATAPACKET,rejected,failed,busy,param_exchange,server answered ACCESS_DENIED (busy with another test or refusing this client),
+12,speedtest.nl1.mirhosting.net,5207,10,NL,Dronten,Mirhosting,rejected,failed,connect_error,control_connect,[Errno 101] Network is unreachable,
+13,speedtest1.cwpanama.net,5506,5,PA,Colón,CW Panama,selected,ok,,,,7.69
+14,49.205.75.2,5010,13,IN,Bengaluru,ACT Fibernet,selected,ok,,,,0.21
+15,156.146.52.1,5201,1,TR,Istanbul,DATAPACKET,selected,ok,,,,48.84

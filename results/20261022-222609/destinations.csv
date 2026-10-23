@@ -1,0 +1,11 @@
+dest_index,host,port,continent,country,site,provider,gbps
+1,a210.speedtest.wobcom.de,5201,Europe,DE,Frankfurt,WOBCOM,2x25
+2,102.214.66.19,5201,Africa,GH,Accra,DATAPACKET,2x10
+3,122.228.230.122,5202,Asia,CN,Ningbo,China Telecom,
+4,66.35.31.81,30003,Asia,JP,Tokyo,FortiSASE,10
+5,iperf.as42831.net,5361,Europe,GB,London,UK Servers,
+6,ping.online.net,5207,Europe,FR,Vitry-sur-Seine,Scaleway,100
+7,speedtest.goco.ca,9214,North America,CA,Montreal,TELUS,10
+8,speedtest1.cwpanama.net,5506,Latin America,PA,Colón,CW Panama,1
+9,49.205.75.2,5010,Asia,IN,Bengaluru,ACT Fibernet,
+10,156.146.52.1,5201,Asia,TR,Istanbul,DATAPACKET,2x10
