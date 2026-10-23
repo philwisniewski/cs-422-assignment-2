@@ -1,5 +1,9 @@
 \documentclass{article}
 \usepackage{graphicx} % Required for inserting images
+\usepackage[margin=1.5cm]{geometry}
+\usepackage[pipeTables=true]{markdown}
+
+\usepackage{hyperref} % load this last
 
 \title{report}
 \date{October 2026}
@@ -9,15 +13,49 @@
 \maketitle
 
 \section{iPerf Throughput Application}
-Some explanation of how iperf3 works
+\subsection{Overview}
 
+Reversed \texttt{iperf3} from the source \href{https://github.com/esnet/iperf}{here} with AI assistance. The iperf3 client is in \texttt{iperf3\_client.py} with the wrapper handling destination selection in \texttt{run\_experiments.py}.
 
-\begin{figure}[htbp]
+Each \texttt{iperf3} test consists of these phases:
+
+\begin{enumerate}
+  \item \texttt{resolve / control\_connect}: DNS resolution and creating the control connection. The server may send \texttt{ACCESS\_DENIED} to refuse the test.
+  \item \texttt{cookie}: The client sends a cookie, which is 36 characters drawn from the lowercase letters and digits. This will allow the server to link the data connection to this ctrl connection.
+  \item \texttt{param\_exchange}: Server requests and client sends JSON parameters such as protocol, test duration, number of parallel streams, size of each write buffer, number of bytes and blocks (we set these to 0, so the test ends only when time runs out), and congestion control algorithm. We do not send the congestion parameter because we don't want the server to fail to select a certain algorithm and abort the test as a result.
+  \item \texttt{create\_streams / data\_connect}: the client creates the data connection and sends the cookie over it. Our client does so after setting the congestion control algorithm.
+  \item \texttt{test\_start / test\_running / test\_end}: The test. Our client generates a block of random data. Then, every interval (default 0.2s), it logs some statistics from the data socket (see section \ref{sec:tcp-stats}, and tries to send another block over the data connection. The server does not send any data back, only ACKs. 
+  \item \texttt{exchange\_results / display\_results}: The client and server exchange stats like CPU utilization, bytes sent, packets, restransmissions, start/end time, etc.
+  \item\texttt{iperf\_done}: Test complete.
+\end{enumerate}
+
+When an error is encountered, the client sends a message over the control connection to terminate the test.
+
+\subsection{Throughput Statistics (run 20261018-121639)}
+
+\begin{figure}[h]
     \centering
-    \includegraphics[width=0.8\textwidth, page=1]{../results/20261018-121639/plots/q1_goodput_timeseries.pdf}
-    \caption{This is the first page of my external PDF document.}
-    \label{fig:pdf_import}
+    \includegraphics[width=0.8\textwidth, page=1]{../results/20261018-121639/plots/q1\_goodput\_timeseries.pdf}
+    \caption{Goodput over time (Mb/s) for TCP CUBIC, Reno, and BBR}
+    \label{fig:goodput-timeseries}
 \end{figure}
 
+
+\begin{markdown}
+| destination | algorithm | algorithm\_actual | runs | samples | min\_mbps | median\_mbps | mean\_mbps | p95\_mbps |
+|---|---|---|---|---|---|---|---|---|
+| speedtest.ams1.nl.leaseweb.net:5205 | cubic | cubic | 1 | 75 | 0.58 | 47.23 | 59.77 | 135.43 |
+| speedtest.ams1.nl.leaseweb.net:5205 | reno | reno | 1 | 75 | 0.58 | 86.10 | 84.55 | 117.56 |
+| speedtest.ams1.nl.leaseweb.net:5205 | bbr | bbr | 1 | 75 | 0.64 | 141.86 | 128.59 | 218.07 |
+| ping.online.net:5206 | cubic | cubic | 1 | 75 | 0.58 | 154.44 | 141.37 | 173.89 |
+| ping.online.net:5206 | reno | reno | 1 | 75 | 0.58 | 84.49 | 82.85 | 127.23 |
+| ping.online.net:5206 | bbr | bbr | 1 | 75 | 0.00 | 142.90 | 131.09 | 213.57 |
+| speedtest.netone.nl:5201 | cubic | cubic | 1 | 75 | 0.58 | 124.41 | 115.75 | 134.56 |
+| speedtest.netone.nl:5201 | reno | reno | 1 | 75 | 0.58 | 156.06 | 147.74 | 169.15 |
+| speedtest.netone.nl:5201 | bbr | bbr | 1 | 75 | 0.23 | 155.49 | 135.76 | 204.86 |
+\end{markdown}
+
+\newpage
+\section{TCP Statistics} \label{sec:tcp-stats}
 
 \end{document}
