@@ -93,7 +93,7 @@ RETRYABLE = {
 
 class Iperf3Error(Exception):
     def __init__(self, kind, phase, message):
-        super().__init__("[%s during %s] %s" % (kind, phase, message))
+        super().__init__(f"[{kind} during {phase}] {message}")
         self.kind = kind
         self.phase = phase
         self.message = message
@@ -158,7 +158,7 @@ class Iperf3Client:
         # Prefer IPv4: many hosts/containers have no IPv6 route.
         infos.sort(key=lambda i: 0 if i[0] == socket.AF_INET else 1)
         if not infos:
-            raise Iperf3Error("dns", "resolve", "no usable address for %s" % self.host)
+            raise Iperf3Error("dns", "resolve", f"no usable address for {self.host}")
         return infos
 
     def _connect(self, family, sockaddr, congestion=None):
@@ -172,15 +172,14 @@ class Iperf3Client:
                 except OSError as e:
                     raise Iperf3Error(
                         "cc_unavailable", self.phase,
-                        "cannot select congestion control %r: %s (is the module "
-                        "loaded and allowed? see README)" % (congestion, e))
+                        f"cannot select congestion control {congestion!r}: {e} (is the module "
+                        "loaded and allowed? see README)")
             s.settimeout(self.connect_timeout)
             try:
                 s.connect(sockaddr)
             except socket.timeout:
                 raise Iperf3Error("connect_timeout", self.phase,
-                                  "connect to %s timed out after %.1fs"
-                                  % (sockaddr[0], self.connect_timeout))
+                                  f"connect to {sockaddr[0]} timed out after {self.connect_timeout:.1f}s")
             except ConnectionRefusedError as e:
                 raise Iperf3Error("connect_refused", self.phase, str(e))
             except OSError as e:
@@ -199,7 +198,7 @@ class Iperf3Client:
                 chunk = sock.recv(remaining)
             except socket.timeout:
                 raise Iperf3Error("ctrl_timeout", self.phase,
-                                  "no reply from server within %.1fs" % sock.gettimeout())
+                                  f"no reply from server within {sock.gettimeout():.1f}s")
             except (ConnectionResetError, BrokenPipeError) as e:
                 raise Iperf3Error("premature_close", self.phase, str(e))
             except OSError as e:
@@ -218,7 +217,7 @@ class Iperf3Client:
         except socket.timeout:
             raise Iperf3Error("ctrl_timeout", self.phase, "send timed out")
         except OSError as e:
-            raise Iperf3Error("premature_close", self.phase, "send failed: %s" % e)
+            raise Iperf3Error("premature_close", self.phase, f"send failed: {e}")
 
     def _send_state(self, state):
         self._trace("tx", state)
@@ -229,9 +228,9 @@ class Iperf3Client:
         try:
             raw = self._recv_exact(self.ctrl, 8, timeout=3.0)
             i_errno, sys_errno = struct.unpack("!ii", raw)
-            msg = "iperf3 server error i_errno=%d" % i_errno
+            msg = f"iperf3 server error i_errno={i_errno}"
             if sys_errno:
-                msg += " errno=%d (%s)" % (sys_errno, os.strerror(sys_errno))
+                msg += f" errno={sys_errno} ({os.strerror(sys_errno)})"
             return msg
         except Iperf3Error:
             return "iperf3 server error (no error code received)"
@@ -254,8 +253,7 @@ class Iperf3Client:
     def _expect_state(self, expected, timeout=None):
         state = self._read_state(timeout)
         if state != expected:
-            raise Iperf3Error("protocol", self.phase, "expected %s, got %s" % (
-                STATE_NAMES[expected], STATE_NAMES.get(state, state)))
+            raise Iperf3Error("protocol", self.phase, f"expected {STATE_NAMES[expected]}, got {STATE_NAMES.get(state, state)}")
 
     def _send_json(self, obj):
         payload = json.dumps(obj, separators=(",", ":")).encode()
@@ -264,12 +262,12 @@ class Iperf3Client:
     def _recv_json(self):
         (length,) = struct.unpack("!I", self._recv_exact(self.ctrl, 4))
         if length == 0 or length > MAX_JSON_LEN:
-            raise Iperf3Error("protocol", self.phase, "bad JSON length %d" % length)
+            raise Iperf3Error("protocol", self.phase, f"bad JSON length {length}")
         raw = self._recv_exact(self.ctrl, length)
         try:
             return json.loads(raw.decode("utf-8", "replace"))
         except ValueError as e:
-            raise Iperf3Error("protocol", self.phase, "bad JSON from server: %s" % e)
+            raise Iperf3Error("protocol", self.phase, f"bad JSON from server: {e}")
 
     # ------------------------------------------------------------- sampling
     def _sample(self, prev):
@@ -360,7 +358,7 @@ class Iperf3Client:
                     last_acked, last_progress = acked, now
                 elif now - last_progress > self.stall_timeout:
                     raise Iperf3Error("stall", self.phase,
-                                      "no data acknowledged for %.1fs" % self.stall_timeout)
+                                      f"no data acknowledged for {self.stall_timeout:.1f}s")
                 if now >= end:
                     break
                 while next_sample <= now:
@@ -384,7 +382,7 @@ class Iperf3Client:
                         break
                     except OSError as e:
                         raise Iperf3Error("premature_close", self.phase,
-                                          "data connection failed: %s" % e)
+                                          f"data connection failed: {e}")
                     self.app_bytes_sent += n
                     if time.monotonic() >= deadline:
                         break
@@ -399,7 +397,7 @@ class Iperf3Client:
         except (BlockingIOError, InterruptedError):
             return
         except OSError as e:
-            raise Iperf3Error("premature_close", self.phase, "control socket: %s" % e)
+            raise Iperf3Error("premature_close", self.phase, f"control socket: {e}")
         if not b:
             raise Iperf3Error("premature_close", self.phase,
                               "server closed the control connection during the test")
@@ -413,8 +411,7 @@ class Iperf3Client:
         if state == ACCESS_DENIED:
             raise Iperf3Error("busy", self.phase, "ACCESS_DENIED during test")
         self.ctrl.setblocking(False)
-        self.log("  ! unexpected state %s from server during test (ignored)"
-                 % STATE_NAMES.get(state, state))
+        self.log(f"  ! unexpected state {STATE_NAMES.get(state, state)} from server during test (ignored)")
 
     # ------------------------------------------------------------- results
     def _client_results(self, cpu0, wall0):
@@ -548,7 +545,7 @@ class Iperf3Client:
             raise
         except Exception as e:  # never let one bad server crash the experiment
             result.update(error_kind="protocol", error_phase=self.phase,
-                          error_msg="%s: %s" % (type(e).__name__, e))
+                          error_msg=f"{type(e).__name__}: {e}")
             result["status"] = "incomplete_termination" if transfer_done else "failed"
             self._abort()
         finally:
