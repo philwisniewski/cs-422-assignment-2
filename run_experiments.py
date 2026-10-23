@@ -76,7 +76,7 @@ def preflight(algorithms):
             set_congestion_control(s, alg)
             info["cc_check"][alg] = get_congestion_control(s)
         except OSError as e:
-            info["cc_check"][alg] = "UNAVAILABLE: %s" % e
+            info["cc_check"][alg] = f"UNAVAILABLE: {e}"
         finally:
             s.close()
     return info
@@ -87,7 +87,7 @@ def run_on_server(server, port_order, args, congestion, duration, tag):
     busy/refused. Returns (result, port)."""
     result, port = None, None
     for port in port_order[:max(1, args.ports_per_server)]:
-        log("  %s %s:%d cc=%s t=%.0fs" % (tag, server["host"], port, congestion or "default", duration))
+        log(f"  {tag} {server['host']}:{port} cc={congestion or 'default'} t={duration:.0f}s")
         client = Iperf3Client(server["host"], port, duration=duration, interval=args.interval,
                               congestion=congestion, connect_timeout=args.connect_timeout,
                               ctrl_timeout=args.ctrl_timeout, stall_timeout=args.stall_timeout,
@@ -95,8 +95,8 @@ def run_on_server(server, port_order, args, congestion, duration, tag):
         result = client.run()
         if result["status"] in analysis.USABLE:
             return result, port
-        log("    -> %s (%s/%s): %s" % (result["status"], result["error_kind"],
-                                       result["error_phase"], result["error_msg"]))
+        log(f"    -> {result['status']} ({result['error_kind']}/"
+            f"{result['error_phase']}): {result['error_msg']}")
         if result["error_kind"] not in ("busy", "connect_refused"):
             break
         time.sleep(1.0)
@@ -108,8 +108,7 @@ def select_destinations(servers, args, rng, out_dir):
     rng.shuffle(cands)
     selected, attempts, logrows = [], 0, []
     max_attempts = args.max_attempts or 3 * args.num_dests
-    log("Selecting %d destinations from %d candidates (max %d attempts)"
-        % (args.num_dests, len(cands), max_attempts))
+    log(f"Selecting {args.num_dests} destinations from {len(cands)} candidates (max {max_attempts} attempts)")
     for srv in cands:
         if len(selected) >= args.num_dests or attempts >= max_attempts:
             break
@@ -119,7 +118,7 @@ def select_destinations(servers, args, rng, out_dir):
         ports = list(srv["ports"])
         rng.shuffle(ports)
         res, port = run_on_server(srv, ports, args, None, args.probe_duration,
-                                  "probe %d/%d" % (attempts, max_attempts))
+                                  f"probe {attempts}/{max_attempts}")
         ok = res["status"] in analysis.USABLE
         logrows.append({
             "attempt": attempts, "host": srv["host"], "port": port, "ports_listed": len(srv["ports"]),
@@ -137,7 +136,7 @@ def select_destinations(servers, args, rng, out_dir):
             entry["port"] = port
             entry["port_order"] = [port] + [p for p in srv["ports"] if p != port]
             selected.append(entry)
-            log("    selected #%d: %s:%d" % (len(selected), srv["host"], port))
+            log(f"    selected #{len(selected)}: {srv['host']}:{port}")
         time.sleep(args.pause)
 
     path = os.path.join(out_dir, "selection_log.csv")
@@ -149,8 +148,8 @@ def select_destinations(servers, args, rng, out_dir):
         w.writerows(logrows)
     shortfall = args.num_dests - len(selected)
     if shortfall > 0:
-        log("WARNING: shortfall of %d destination(s): only %d/%d selected after %d attempts"
-            % (shortfall, len(selected), args.num_dests, attempts))
+        log(f"WARNING: shortfall of {shortfall} destination(s): only {len(selected)}/{args.num_dests} "
+            f"selected after {attempts} attempts")
     return selected, attempts, shortfall
 
 
@@ -183,20 +182,20 @@ def run_experiments(selected, args, out_dir):
                 order = algs[k:] + algs[:k]
                 for alg in order:
                     seq += 1
-                    label = "%s:%d" % (dest["host"], dest["port"])
-                    run_id = "r%02d_d%02d_%s" % (rep, di + 1, alg)
+                    label = f"{dest['host']}:{dest['port']}"
+                    run_id = f"r{rep:02d}_d{di + 1:02d}_{alg}"
                     res, attempt = None, 0
                     for attempt in range(1, args.run_retries + 2):
                         res, port = run_on_server(
                             dest, dest["port_order"], args, alg, args.duration,
-                            "[%d/%d] rep %d dest %d %s (try %d)" % (seq, total, rep, di + 1, alg, attempt))
+                            f"[{seq}/{total}] rep {rep} dest {di + 1} {alg} (try {attempt})")
                         if res["status"] in analysis.USABLE or not RETRYABLE.get(res["error_kind"], False):
                             break
                         backoff = args.retry_backoff * attempt + random.uniform(0, 3)
-                        log("    retrying in %.0fs" % backoff)
+                        log(f"    retrying in {backoff:.0f}s")
                         time.sleep(backoff)
                     if res["status"] in analysis.USABLE and res["actual_cc"] != alg:
-                        log("    WARNING: requested %s but kernel used %s" % (alg, res["actual_cc"]))
+                        log(f"    WARNING: requested {alg} but kernel used {res['actual_cc']}")
                     samples = res.pop("samples")
                     record = dict(res)
                     record.update(run_id=run_id, rep=rep, dest_index=di + 1, destination=label,
@@ -212,10 +211,10 @@ def run_experiments(selected, args, out_dir):
                     order_f.flush()
                     if res["status"] in analysis.USABLE and samples:
                         last = samples[-1]
-                        log("    done: %s, %.1f Mbit/s avg, %s retrans, srtt %.1f ms"
-                            % (res["status"],
-                               last["bytes_acked_B"] * 8 / 1e6 / max(last["t_s"], 1e-9),
-                               last["total_retrans_seg"], (last["srtt_us"] or 0) / 1e3))
+                        mbps = last["bytes_acked_B"] * 8 / 1e6 / max(last["t_s"], 1e-9)
+                        srtt_ms = (last["srtt_us"] or 0) / 1e3
+                        log(f"    done: {res['status']}, {mbps:.1f} Mbit/s avg, "
+                            f"{last['total_retrans_seg']} retrans, srtt {srtt_ms:.1f} ms")
                     time.sleep(args.pause)
     except KeyboardInterrupt:
         log("Interrupted — analysing the runs completed so far")
@@ -282,12 +281,12 @@ def main(argv=None):
     rng = random.Random(seed)
 
     pre = preflight(args.algorithms)
-    log("Kernel %s | default CC %s | available: %s | allowed: %s"
-        % (pre["kernel"], pre["default_cc"], pre["available_cc"], pre["allowed_cc"]))
+    log(f"Kernel {pre['kernel']} | default CC {pre['default_cc']} | "
+        f"available: {pre['available_cc']} | allowed: {pre['allowed_cc']}")
     bad = {a: v for a, v in pre["cc_check"].items() if v.startswith("UNAVAILABLE")}
     if bad:
         for a, v in bad.items():
-            log("ERROR: congestion control %r %s" % (a, v))
+            log(f"ERROR: congestion control {a!r} {v}")
         log("Load the module on the host (e.g. `sudo modprobe tcp_bbr`) and, in Docker, run with "
             "--cap-add NET_ADMIN (see README). Aborting.")
         return 2
@@ -300,7 +299,7 @@ def main(argv=None):
     if args.ipv4_only:
         servers = [s for s in servers if not is_ipv6_literal(s["host"])]
     if not servers:
-        log("ERROR: no servers parsed from %s (after filters)" % args.servers)
+        log(f"ERROR: no servers parsed from {args.servers} (after filters)")
         return 2
 
     meta = {
@@ -337,8 +336,8 @@ def main(argv=None):
         return 1
 
     est = args.reps * len(selected) * len(args.algorithms) * (args.duration + args.pause + 3)
-    log("Running %d reps x %d destinations x %d algorithms (~%.0f min)"
-        % (args.reps, len(selected), len(args.algorithms), est / 60))
+    log(f"Running {args.reps} reps x {len(selected)} destinations x {len(args.algorithms)} algorithms "
+        f"(~{est / 60:.0f} min)")
     run_experiments(selected, args, out_dir)
     meta["finished"] = time.strftime("%Y-%m-%d %H:%M:%S %z")
     with open(os.path.join(out_dir, "metadata.json"), "w") as f:
@@ -347,8 +346,7 @@ def main(argv=None):
     analysis.analyze(out_dir, args.rep_dest, args.warmup)
     runs = analysis.load_runs(out_dir)
     ok = sum(1 for r in runs if r["status"] in analysis.USABLE)
-    log("Finished: %d/%d runs usable, %d destination shortfall. Results in %s"
-        % (ok, len(runs), shortfall, out_dir))
+    log(f"Finished: {ok}/{len(runs)} runs usable, {shortfall} destination shortfall. Results in {out_dir}")
     return 0
 
 
